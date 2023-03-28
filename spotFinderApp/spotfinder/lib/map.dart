@@ -19,9 +19,9 @@ class _MyMapState extends State<MyMap> {
   Widget _buildMap() {
     return FlutterMap(
       options: MapOptions(
-        center:
-            LatLng(40.7128, -74.0060), // Set the location you want to center on
-        zoom: 13.0,
+        center: LatLng(
+            51.230412, 4.416810), // Set the location you want to center on
+        zoom: 17.0,
       ),
       layers: [
         TileLayerOptions(
