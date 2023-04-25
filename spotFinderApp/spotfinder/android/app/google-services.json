@@ -29,6 +29,13 @@
             {
               "client_id": "471359135011-a7156f3g0f2ug3b8c7fhg2238tdah04e.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "471359135011-uhp47cl6qnu97n9gh7976pagojb4psg6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.spotfinder"
+              }
             }
           ]
         }

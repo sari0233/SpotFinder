@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart' show InteractiveFlag;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:intl/intl.dart';
 
 class MapPage extends StatefulWidget {
   MapPage({Key? key}) : super(key: key);
@@ -17,6 +18,7 @@ class _MapPageState extends State<MapPage> {
   final GeolocatorPlatform _geolocator = GeolocatorPlatform.instance;
   List<Marker> _markers = [];
   final _endTimeController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -27,14 +29,23 @@ class _MapPageState extends State<MapPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        // ...
-        );
+      appBar: AppBar(
+        title: Text('Spot Finder'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.my_location),
+            onPressed: _getCurrentLocation,
+          ),
+        ],
+      ),
+      body: _buildMap(),
+    );
   }
 
   Widget _buildMap() {
     return FlutterMap(
       options: MapOptions(
-          center: LatLng(51.1374248, 4.456249),
+          center: LatLng(51.1267117, 4.4411588),
           zoom: 17.0,
           minZoom: 16.0,
           maxZoom: 18.0,
@@ -119,20 +130,34 @@ class _MapPageState extends State<MapPage> {
                 builder: (BuildContext context) {
                   return AlertDialog(
                     title: Text('Voer de eindtijd in'),
-                    content: TextField(
-                      decoration: InputDecoration(hintText: "Eindtijd"),
-                      onChanged: (value) {
-                        print('Eindtijd: $value');
-                      },
+                    content: Form(
+                      key: _formKey,
+                      child: TextFormField(
+                        controller: _endTimeController,
+                        decoration: InputDecoration(hintText: "Eindtijd"),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Voer een geldige eindtijd in';
+                          }
+                          try {
+                            DateTime.parse(value);
+                          } catch (e) {
+                            return 'Ongeldig datumformaat';
+                          }
+                          return null;
+                        },
+                      ),
                     ),
                     actions: [
                       TextButton(
                         child: Text('OK'),
                         onPressed: () {
-                          DateTime endTime =
-                              DateTime.parse(_endTimeController.text);
-                          _saveParkingLocation(point, endTime);
-                          Navigator.of(context).pop();
+                          if (_formKey.currentState!.validate()) {
+                            DateTime endTime =
+                                DateTime.parse(_endTimeController.text);
+                            _saveParkingLocation(point, endTime);
+                            Navigator.of(context).pop();
+                          }
                         },
                       ),
                     ],
