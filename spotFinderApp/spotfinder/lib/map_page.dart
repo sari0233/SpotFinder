@@ -6,6 +6,8 @@ import 'package:flutter_map/flutter_map.dart' show InteractiveFlag;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
 
 class MapPage extends StatefulWidget {
   MapPage({Key? key}) : super(key: key);
@@ -19,11 +21,34 @@ class _MapPageState extends State<MapPage> {
   List<Marker> _markers = [];
   final _endTimeController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _showParkingLocations();
+    _timer = Timer.periodic(Duration(minutes: 1), (timer) {
+      _checkExpiredParkingSpots();
+      _updateMarkers();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkExpiredParkingSpots() async {
+    CollectionReference parkingSpots =
+        FirebaseFirestore.instance.collection('parkingSpots');
+
+    QuerySnapshot querySnapshot =
+        await parkingSpots.where('endTime', isLessThan: DateTime.now()).get();
+
+    for (var doc in querySnapshot.docs) {
+      await doc.reference.delete();
+    }
   }
 
   @override
@@ -31,21 +56,20 @@ class _MapPageState extends State<MapPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Spot Finder'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.my_location),
-            onPressed: _getCurrentLocation,
-          ),
-        ],
       ),
       body: _buildMap(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _getCurrentLocation,
+        child: Icon(Icons.my_location),
+        backgroundColor: Theme.of(context).primaryColor,
+      ),
     );
   }
 
   Widget _buildMap() {
     return FlutterMap(
       options: MapOptions(
-          center: LatLng(51.1267117, 4.4411588),
+          center: LatLng(51.230459, 4.4146563),
           zoom: 17.0,
           minZoom: 16.0,
           maxZoom: 18.0,
@@ -108,10 +132,17 @@ class _MapPageState extends State<MapPage> {
     });
   }
 
+  void _updateMarkers() {
+    setState(() {
+      _markers = [];
+    });
+    _showParkingLocations();
+  }
+
   void _getCurrentLocation() async {
     try {
       Position position = await _geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        desiredAccuracy: LocationAccuracy.bestForNavigation,
       );
       print('Huidige locatie: $position');
       LatLng point = LatLng(position.latitude, position.longitude);
@@ -130,34 +161,22 @@ class _MapPageState extends State<MapPage> {
                 builder: (BuildContext context) {
                   return AlertDialog(
                     title: Text('Voer de eindtijd in'),
-                    content: Form(
-                      key: _formKey,
-                      child: TextFormField(
-                        controller: _endTimeController,
-                        decoration: InputDecoration(hintText: "Eindtijd"),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Voer een geldige eindtijd in';
-                          }
-                          try {
-                            DateTime.parse(value);
-                          } catch (e) {
-                            return 'Ongeldig datumformaat';
-                          }
-                          return null;
-                        },
-                      ),
+                    content: TextField(
+                      controller: _endTimeController,
+                      keyboardType: TextInputType.datetime,
+                      decoration: InputDecoration(hintText: "Eindtijd (HH:mm)"),
                     ),
                     actions: [
                       TextButton(
                         child: Text('OK'),
                         onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            DateTime endTime =
-                                DateTime.parse(_endTimeController.text);
-                            _saveParkingLocation(point, endTime);
-                            Navigator.of(context).pop();
-                          }
+                          DateTime parsedTime = DateFormat('HH:mm')
+                              .parse(_endTimeController.text);
+                          DateTime now = DateTime.now();
+                          DateTime endTime = DateTime(now.year, now.month,
+                              now.day, parsedTime.hour, parsedTime.minute);
+                          _saveParkingLocation(point, endTime);
+                          Navigator.of(context).pop();
                         },
                       ),
                     ],
