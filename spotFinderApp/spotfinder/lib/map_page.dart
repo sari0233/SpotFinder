@@ -8,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:geocoding/geocoding.dart';
 
 class MapPage extends StatefulWidget {
   MapPage({Key? key}) : super(key: key);
@@ -22,6 +23,7 @@ class _MapPageState extends State<MapPage> {
   final _endTimeController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   Timer? _timer;
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
@@ -69,10 +71,13 @@ class _MapPageState extends State<MapPage> {
   Widget _buildMap() {
     return FlutterMap(
       options: MapOptions(
-          center: LatLng(51.230459, 4.4146563),
+          center: LatLng(51.1755721, 4.4318436),
           zoom: 17.0,
           minZoom: 16.0,
           maxZoom: 18.0,
+          onTap: (_, latlng) {
+            _addMarker(latlng);
+          },
           interactiveFlags:
               InteractiveFlag.pinchZoom | InteractiveFlag.doubleTapZoom),
       layers: [
@@ -92,6 +97,7 @@ class _MapPageState extends State<MapPage> {
     await parkingSpots.add({
       'location': GeoPoint(location.latitude, location.longitude),
       'endTime': endTime,
+      'reserved': false,
     });
   }
 
@@ -101,12 +107,59 @@ class _MapPageState extends State<MapPage> {
     return parkingSpots.snapshots();
   }
 
+  void _onReserveButtonPressed(
+      DocumentSnapshot doc, BuildContext context) async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Voer de eindtijd in voor uw reservering'),
+          content: TextField(
+            controller: _endTimeController,
+            keyboardType: TextInputType.datetime,
+            decoration: InputDecoration(hintText: "Eindtijd (HH:mm)"),
+          ),
+          actions: [
+            TextButton(
+              child: Text('OK'),
+              onPressed: () async {
+                DateTime parsedTime =
+                    DateFormat('HH:mm').parse(_endTimeController.text);
+                DateTime now = DateTime.now();
+                DateTime endTime = DateTime(now.year, now.month, now.day,
+                    parsedTime.hour, parsedTime.minute);
+
+                await doc.reference.update({
+                  'endTime': endTime,
+                  'reserved': true,
+                });
+
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showParkingLocations() {
     _getParkingLocations().listen((querySnapshot) {
-      querySnapshot.docChanges.forEach((change) {
+      querySnapshot.docChanges.forEach((change) async {
+        // Maak deze functie async
         if (change.type == DocumentChangeType.added) {
           GeoPoint geoPoint = change.doc['location'];
           DateTime endTime = change.doc['endTime'].toDate();
+          bool reserved = change.doc['reserved'];
+
+          // Bepaal de kleur van de marker op basis van de resterende tijd
+          Color markerColor = reserved
+              ? Color.fromARGB(255, 86, 0, 198)
+              : _calculateMarkerColor(endTime);
+
+          // Haal het dichtstbijzijnde straatadres op
+          String address = await _getAddressFromLatLng(
+              geoPoint.latitude, geoPoint.longitude);
 
           Marker marker = Marker(
             width: 80.0,
@@ -115,10 +168,33 @@ class _MapPageState extends State<MapPage> {
             builder: (ctx) => Container(
               child: IconButton(
                 icon: Icon(Icons.location_on),
-                color: Colors.red,
+                color: markerColor,
                 iconSize: 45.0,
                 onPressed: () {
-                  print('Eindtijd: $endTime');
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: Text('Eindtijd en adres'),
+                        content: Text(
+                            'Eindtijd: ${DateFormat('dd-MM-yyyy HH:mm').format(endTime)}\nAdres: $address'),
+                        actions: [
+                          TextButton(
+                            child: Text('OK'),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                          TextButton(
+                            child: Text('Reserveer'),
+                            onPressed: () {
+                              _onReserveButtonPressed(change.doc, context);
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
                 },
               ),
             ),
@@ -132,11 +208,85 @@ class _MapPageState extends State<MapPage> {
     });
   }
 
+  Future<String> _getAddressFromLatLng(
+      double latitude, double longitude) async {
+    try {
+      List<Placemark> placemarks =
+          await placemarkFromCoordinates(latitude, longitude);
+      Placemark place = placemarks[0];
+      return "${place.street}, ${place.postalCode} ${place.locality}";
+    } catch (e) {
+      print("Error retrieving address: $e");
+      return "Address not found";
+    }
+  }
+
+  Color _calculateMarkerColor(DateTime endTime) {
+    Duration timeDifference = endTime.difference(DateTime.now());
+    if (timeDifference.inHours >= 2) {
+      return Colors.red;
+    } else if (timeDifference.inHours >= 1) {
+      return Colors.orange;
+    } else if (timeDifference.inMinutes >= 30) {
+      return Colors.yellow;
+    } else {
+      return Colors.green;
+    }
+  }
+
   void _updateMarkers() {
     setState(() {
       _markers = [];
     });
     _showParkingLocations();
+  }
+
+  void _addMarker(LatLng latlng) {
+    Marker marker = Marker(
+      width: 80.0,
+      height: 80.0,
+      point: latlng,
+      builder: (ctx) => Container(
+        child: IconButton(
+          icon: Icon(Icons.location_on),
+          color: Colors.red,
+          iconSize: 45.0,
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: Text('Voer de eindtijd in'),
+                  content: TextField(
+                    controller: _endTimeController,
+                    keyboardType: TextInputType.datetime,
+                    decoration: InputDecoration(hintText: "Eindtijd (HH:mm)"),
+                  ),
+                  actions: [
+                    TextButton(
+                      child: Text('OK'),
+                      onPressed: () {
+                        DateTime parsedTime =
+                            DateFormat('HH:mm').parse(_endTimeController.text);
+                        DateTime now = DateTime.now();
+                        DateTime endTime = DateTime(now.year, now.month,
+                            now.day, parsedTime.hour, parsedTime.minute);
+                        _saveParkingLocation(latlng, endTime);
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+
+    setState(() {
+      _markers.add(marker);
+    });
   }
 
   void _getCurrentLocation() async {
