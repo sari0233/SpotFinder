@@ -93,7 +93,22 @@ class _MapPageState extends State<MapPage> {
         await parkingSpots.where('endTime', isLessThan: DateTime.now()).get();
 
     for (var doc in querySnapshot.docs) {
-      await doc.reference.delete();
+      if (doc['reserved'] == true &&
+          doc['nextStartTime'] != null &&
+          doc['nextEndTime'] != null &&
+          doc['nextUserEmail'] != null) {
+        await doc.reference.update({
+          'startTime': doc['nextStartTime'],
+          'endTime': doc['nextEndTime'],
+          'userEmail': doc['nextUserEmail'],
+          'reserved': false,
+          'nextStartTime': null,
+          'nextEndTime': null,
+          'nextUserEmail': null,
+        });
+      } else {
+        await doc.reference.delete();
+      }
     }
   }
 
@@ -127,9 +142,15 @@ class _MapPageState extends State<MapPage> {
               GeoPoint geoPoint = doc['location'];
               DateTime endTime = doc['endTime'].toDate();
               bool reserved = doc['reserved'];
-              Color markerColor = reserved
-                  ? Color.fromARGB(255, 86, 0, 198)
-                  : _calculateMarkerColor(endTime);
+              String markerUserEmail = doc['userEmail'];
+              Color markerColor;
+              if (markerUserEmail == widget.userEmail) {
+                markerColor = Colors.blue;
+              } else {
+                markerColor = reserved
+                    ? Color.fromARGB(255, 86, 0, 198)
+                    : _calculateMarkerColor(endTime);
+              }
               return Marker(
                 width: 80.0,
                 height: 80.0,
@@ -173,14 +194,22 @@ class _MapPageState extends State<MapPage> {
 
   void _markerOnPressed(DocumentSnapshot? doc, Color markerColor,
       {bool isNew = false}) async {
+    DateTime? startTime = doc?['startTime']?.toDate();
     String userEmail = doc != null ? doc['userEmail'] : 'Niet ingesteld';
     LatLng location;
     DateTime? endTime;
     bool reserved = false;
+    String? nextUserEmail = doc?['nextUserEmail'];
+    DateTime? nextStartTime = doc?['nextStartTime']?.toDate();
+    DateTime? nextEndTime = doc?['nextEndTime']?.toDate();
+
     if (doc != null) {
       GeoPoint geoPoint = doc['location'];
-      endTime = doc['endTime'].toDate();
-      reserved = doc['reserved'];
+      endTime = doc['endTime']?.toDate();
+      reserved = doc['reserved'] ?? false;
+      nextUserEmail = doc['nextUserEmail'];
+      nextStartTime = doc['nextStartTime']?.toDate();
+      nextEndTime = doc['nextEndTime']?.toDate();
       location = LatLng(geoPoint.latitude, geoPoint.longitude);
     } else {
       location = _userMarkers.last.point;
@@ -194,19 +223,30 @@ class _MapPageState extends State<MapPage> {
         context: context,
         builder: (BuildContext context) {
           return AlertDialog(
-            title: Text('Gegevens parkeerplaats'),
+            title: Text('Gegevens parkeerplaats',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text('Adres: $address'),
+                SizedBox(height: 10),
                 Text(
-                  'Eindtijd: ${endTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(endTime) : 'Niet ingesteld'}',
+                  'Huidige sessie: ${startTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(startTime) : 'Niet ingesteld'} - ${endTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(endTime) : 'Niet ingesteld'}',
                 ),
                 endTime != null
                     ? RemainingTimeWidget(endTime: endTime)
                     : SizedBox.shrink(),
-                Text('Adres: $address'),
-                Text('E-mailadres: $userEmail'),
+                Text('Gebruiker: $userEmail'),
+                SizedBox(height: 15),
+                nextUserEmail != null
+                    ? Text(
+                        'Volgende sessie: ${nextStartTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(nextStartTime) : 'Niet ingesteld'} - ${nextEndTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(nextEndTime) : 'Niet ingesteld'}',
+                      )
+                    : SizedBox.shrink(),
+                nextUserEmail != null
+                    ? Text('Volgende gebruiker: $nextUserEmail')
+                    : SizedBox.shrink(),
               ],
             ),
             actions: [
@@ -217,18 +257,58 @@ class _MapPageState extends State<MapPage> {
                 },
               ),
               doc != null
-                  ? TextButton(
-                      child: Text('Reserveer'),
-                      onPressed: () {
-                        _onReserveButtonPressed(doc, context);
-                      },
-                    )
+                  ? userEmail == widget.userEmail
+                      ? TextButton(
+                          child: Text('Verleng'),
+                          onPressed: () {
+                            _showExtendInputDialog(doc, context);
+                          },
+                        )
+                      : TextButton(
+                          child: Text('Reserveer'),
+                          onPressed: () {
+                            _onReserveButtonPressed(doc, context);
+                          },
+                        )
                   : SizedBox.shrink(),
             ],
           );
         },
       );
     }
+  }
+
+  void _showExtendInputDialog(DocumentSnapshot doc, BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Voer de nieuwe eindtijd in'),
+          content: TextField(
+            controller: _endTimeController,
+            keyboardType: TextInputType.datetime,
+            decoration: InputDecoration(hintText: "Eindtijd (HH:mm)"),
+          ),
+          actions: [
+            TextButton(
+              child: Text('OK'),
+              onPressed: () async {
+                DateTime parsedTime =
+                    DateFormat('HH:mm').parse(_endTimeController.text);
+                DateTime now = DateTime.now();
+                DateTime endTime = DateTime(now.year, now.month, now.day,
+                    parsedTime.hour, parsedTime.minute);
+                await doc.reference.update({
+                  'endTime': endTime,
+                });
+                _endTimeController.clear();
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showEndTimeInputDialog(LatLng location) {
@@ -268,9 +348,13 @@ class _MapPageState extends State<MapPage> {
 
     await parkingSpots.add({
       'location': GeoPoint(location.latitude, location.longitude),
+      'startTime': DateTime.now(),
       'endTime': endTime,
       'reserved': false,
       'userEmail': widget.userEmail,
+      'nextUserEmail': null, // Voeg dit toe
+      'nextStartTime': null, // Voeg dit toe
+      'nextEndTime': null, // Voeg dit toe
     });
     setState(() {
       _userMarkers.removeLast();
@@ -342,8 +426,10 @@ class _MapPageState extends State<MapPage> {
                         parsedTime.hour, parsedTime.minute);
 
                     await doc.reference.update({
-                      'endTime': endTime,
+                      'nextStartTime': doc['endTime'],
+                      'nextEndTime': endTime,
                       'reserved': true,
+                      'nextUserEmail': widget.userEmail,
                     });
 
                     _endTimeController.clear();
