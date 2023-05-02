@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'map_page.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:spotfinder/pages/login_page.dart';
+import 'firebase_options.dart';
+import 'map_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,27 +31,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Spot Finder',
+      debugShowCheckedModeBanner: false,
+      title: 'Flutter Demo',
+      home: const LoginPage(),
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primaryColor: Colors.blue,
       ),
-      home: FutureBuilder(
-        future: firebaseInitialization,
-        builder: (BuildContext context, AsyncSnapshot<FirebaseApp> snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            return MapPage();
-          } else {
-            return Scaffold(
-              appBar: AppBar(
-                title: Text('Spot Finder'),
-              ),
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-        },
-      ),
+      routes: {
+        '/map': (context) => MapPage(),
+      },
     );
   }
 }
