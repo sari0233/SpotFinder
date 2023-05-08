@@ -10,6 +10,8 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:geocoding/geocoding.dart';
 import 'package:collection/collection.dart';
+import 'package:spotfinder/pages/profile_page.dart';
+import 'package:spotfinder/pages/settings_page.dart';
 
 class HomePage extends StatelessWidget {
   final String userEmail;
@@ -38,12 +40,23 @@ class HomePage extends StatelessWidget {
                   onPressed: () {},
                 ),
                 IconButton(
-                  icon: const Icon(Icons.person),
-                  onPressed: () {},
-                ),
+                    icon: const Icon(Icons.person),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => ProfilePage(userEmail: userEmail)),
+                      );
+                    }),
                 IconButton(
                   icon: const Icon(Icons.settings),
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const SettingsPage()),
+                    );
+                  },
                 ),
               ],
             ),
@@ -115,9 +128,9 @@ class _MapPageState extends State<MapPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      /*appBar: AppBar(
         title: Text('Spot Finder'),
-      ),
+      ),*/
       body: _buildMap(),
       floatingActionButton: FloatingActionButton(
         onPressed: _getCurrentLocation,

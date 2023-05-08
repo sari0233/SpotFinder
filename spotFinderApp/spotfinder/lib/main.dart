@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:spotfinder/pages/login_page.dart';
-import 'firebase_options.dart';
 import 'map_page.dart';
 
 void main() async {
@@ -24,18 +23,21 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   final Future<FirebaseApp> firebaseInitialization;
+  
 
   const MyApp({Key? key, required this.firebaseInitialization})
       : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    bool isDarkMode = false;
+    
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Flutter Demo',
       home: const LoginPage(),
       theme: ThemeData(
-        primaryColor: Colors.blue,
+        primarySwatch: Colors.blue,
       ),
       routes: {
         '/map': (context) => MapPage(),

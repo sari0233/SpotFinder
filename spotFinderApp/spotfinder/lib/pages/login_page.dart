@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:spotfinder/pages/home_page.dart';
 import 'signup_page.dart';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _LoginPageState createState() => _LoginPageState();
 }
 
@@ -14,27 +17,53 @@ class _LoginPageState extends State<LoginPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
-  Future<void> _login() async {
+  void _login() async {
     try {
       final query = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: emailController.text)
-          .where('password', isEqualTo: passwordController.text)
           .get();
       final users = query.docs.map((doc) => doc.data()).toList();
       if (users.isNotEmpty) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => HomePage(userEmail: users[0]['email'])),
-        );
+        // Encrypt the entered password using SHA-256
+        final bytes = utf8.encode(passwordController.text);
+        final digest = sha256.convert(bytes);
+        final encryptedPassword = digest.toString();
+
+        // Check if the encrypted password matches the one stored in Firestore
+        if (users[0]['password'] == encryptedPassword) {
+          // ignore: use_build_context_synchronously
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => HomePage(userEmail: users[0]['email'])),
+          );
+        } else {
+          // Invalid password
+          // ignore: use_build_context_synchronously
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('Invalid Password'),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            },
+          );
+        }
       } else {
-        // invalid email or password
+        // Invalid email
+        // ignore: use_build_context_synchronously
         showDialog(
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: const Text('Invalid Email or Password'),
+              title: const Text('Invalid Email'),
               actions: <Widget>[
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -46,6 +75,7 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } catch (e) {
+      // ignore: avoid_print
       print('Error during login: $e');
     }
   }
