@@ -36,7 +36,10 @@ class _LoginPageState extends State<LoginPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-                builder: (context) => HomePage(userEmail: users[0]['email'])),
+                builder: (context) => HomePage(
+                      userEmail: users[0]['email'],
+                      activeVehicle: users[0]['activeVehicle'],
+                    )),
           );
         } else {
           // Invalid password

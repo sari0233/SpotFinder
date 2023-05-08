@@ -106,7 +106,10 @@ class _SignupPageState extends State<SignupPage> {
           'firstName': firstName,
           'lastName': lastName,
           'email': email,
-          'password': encryptedPassword, // Store the encrypted password in Firestore
+          'password':
+              encryptedPassword, // Store the encrypted password in Firestore
+          'vehicles': [], // Initialize an empty list of vehicles
+          'activeVehicle': null, // Initialize the active vehicle to 'null
         });
 
         // ignore: use_build_context_synchronously
@@ -124,6 +127,5 @@ class _SignupPageState extends State<SignupPage> {
         );
       }
     }
+  }
 }
-}
-
