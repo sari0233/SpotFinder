@@ -1,82 +1,5 @@
-/*import 'package:flutter/material.dart';
-import 'package:collection/collection.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-class SignUpPage extends StatefulWidget {
-  const SignUpPage({super.key});
-
-  @override
-  _SignUpPageState createState() => _SignUpPageState();
-}
-
-class _SignUpPageState extends State<SignUpPage> {
-  final _formKey = GlobalKey<FormState>();
-  late String _email, _password;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sign Up'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: <Widget>[
-              TextFormField(
-                validator: (input) {
-                  if (input!.isEmpty) {
-                    return 'Please enter an email';
-                  }
-                  return null;
-                },
-                onSaved: (input) => _email = input!,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                ),
-              ),
-              TextFormField(
-                validator: (input) {
-                  if (input!.length < 6) {
-                    return 'Password must be at least 6 characters';
-                  }
-                  return null;
-                },
-                onSaved: (input) => _password = input!,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                ),
-                obscureText: true,
-              ),
-              ElevatedButton(
-                onPressed: signUp,
-                child: const Text('Sign Up'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void signUp() async {
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
-      try {
-        await FirebaseFirestore.instance.collection('users').add({
-          'email': _email,
-          'password': _password,
-        });
-        Navigator.pop(context);
-      } catch (e) {
-        print(e);
-      }
-    }
-  }
-}*/
-
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -84,6 +7,7 @@ class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _SignupPageState createState() => _SignupPageState();
 }
 
@@ -172,20 +96,35 @@ class _SignupPageState extends State<SignupPage> {
       final email = _emailController.text;
       final password = _passwordController.text;
 
+      // Encrypt the password using SHA-256
+      final bytes = utf8.encode(password);
+      final digest = sha256.convert(bytes);
+      final encryptedPassword = digest.toString();
+
       try {
         await FirebaseFirestore.instance.collection('users').add({
           'firstName': firstName,
           'lastName': lastName,
           'email': email,
-          'password': password,
+          'password':
+              encryptedPassword, // Store the encrypted password in Firestore
+          'vehicles': [], // Initialize an empty list of vehicles
+          'activeVehicle': null, // Initialize the active vehicle to 'null
+          'ratings': [
+            0,
+            0
+          ], // Initialize the ratings array with two values: sum of ratings and number of ratings
         });
 
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('User created successfully')),
         );
 
+        // ignore: use_build_context_synchronously
         Navigator.pop(context);
       } catch (e) {
+        // ignore: avoid_print
         print('Error creating user: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to create user')),
@@ -194,4 +133,3 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 }
-
