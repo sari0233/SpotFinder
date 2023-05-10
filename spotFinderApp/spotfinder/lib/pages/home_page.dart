@@ -15,7 +15,9 @@ import 'package:spotfinder/pages/settings_page.dart';
 
 class HomePage extends StatelessWidget {
   final String userEmail;
-  HomePage({Key? key, required this.userEmail}) : super(key: key);
+  final Map<String, dynamic>? activeVehicle;
+  HomePage({Key? key, required this.userEmail, required this.activeVehicle})
+      : super(key: key);
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -24,7 +26,9 @@ class HomePage extends StatelessWidget {
       ),
       body: Column(
         children: [
-          Expanded(child: MapPage(userEmail: userEmail)),
+          Expanded(
+              child:
+                  MapPage(userEmail: userEmail, activeVehicle: activeVehicle)),
           const SizedBox(height: 5),
           Container(
             height: 60,
@@ -45,7 +49,8 @@ class HomePage extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) => ProfilePage(userEmail: userEmail)),
+                            builder: (context) =>
+                                ProfilePage(userEmail: userEmail)),
                       );
                     }),
                 IconButton(
@@ -69,8 +74,10 @@ class HomePage extends StatelessWidget {
 
 class MapPage extends StatefulWidget {
   final String userEmail;
+  final Map<String, dynamic>? activeVehicle;
 
-  MapPage({Key? key, required this.userEmail}) : super(key: key);
+  MapPage({Key? key, required this.userEmail, required this.activeVehicle})
+      : super(key: key);
 
   @override
   _MapPageState createState() => _MapPageState();
@@ -84,12 +91,131 @@ class _MapPageState extends State<MapPage> {
   final _formKey = GlobalKey<FormState>();
   Timer? _timer;
   DateTime _selectedDate = DateTime.now();
+  Map<String, dynamic>? activeVehicle;
   @override
   void initState() {
     super.initState();
+    _checkExpiredParkingSpots();
+    activeVehicle = widget.activeVehicle;
     _timer = Timer.periodic(Duration(minutes: 1), (timer) {
       _checkExpiredParkingSpots();
     });
+  }
+
+  Future<List<dynamic>> _getUserVehicles() async {
+    QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where('email', isEqualTo: widget.userEmail)
+        .get();
+    return querySnapshot.docs.first['vehicles'] ?? [];
+  }
+
+  Future<void> _updateActiveVehicle(
+      String userEmail, Map<String, dynamic> vehicle) async {
+    try {
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: userEmail)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        DocumentSnapshot userDoc = querySnapshot.docs.first;
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userDoc.id)
+            .update({'activeVehicle': vehicle});
+      }
+    } catch (e) {
+      print('Error updating active vehicle: $e');
+    }
+  }
+
+  Widget _buildVehicleButton() {
+    String buttonText = activeVehicle != null
+        ? '${activeVehicle!['brand']} ${activeVehicle!['model']}'
+        : 'Selecteer een voertuig';
+
+    return FutureBuilder<List<dynamic>>(
+      future: _getUserVehicles(),
+      builder: (BuildContext context, AsyncSnapshot<List<dynamic>> snapshot) {
+        if (snapshot.hasError) {
+          return const Text('Error: Could not load vehicles');
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return CircularProgressIndicator();
+        }
+
+        final vehicles = snapshot.data!;
+
+        return PopupMenuButton<dynamic>(
+          padding: EdgeInsets.zero,
+          itemBuilder: (BuildContext context) {
+            return vehicles.map((vehicle) {
+              return PopupMenuItem<dynamic>(
+                value: vehicle,
+                child: Text('${vehicle['brand']} ${vehicle['model']}'),
+              );
+            }).toList();
+          },
+          onSelected: (dynamic vehicle) {
+            setState(() {
+              activeVehicle = vehicle;
+            });
+            _updateActiveVehicle(widget.userEmail, vehicle);
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 2,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              buttonText,
+              style: TextStyle(color: Colors.black, fontSize: 16),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildVehicleSelector() {
+    return FutureBuilder<List<dynamic>>(
+      future: _getUserVehicles(),
+      builder: (BuildContext context, AsyncSnapshot<List<dynamic>> snapshot) {
+        if (snapshot.hasError) {
+          return const Text('Error: Could not load vehicles');
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return CircularProgressIndicator();
+        }
+        final vehicles = snapshot.data!;
+        return ListView.builder(
+          itemCount: vehicles.length,
+          itemBuilder: (BuildContext context, int index) {
+            final vehicle = vehicles[index];
+            return ListTile(
+              title: Text('${vehicle['brand']} ${vehicle['model']}'),
+              onTap: () {
+                setState(() {
+                  activeVehicle = vehicle;
+                });
+                _updateActiveVehicle(widget.userEmail, vehicle);
+                Navigator.of(context).pop();
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -111,13 +237,17 @@ class _MapPageState extends State<MapPage> {
           doc['nextEndTime'] != null &&
           doc['nextUserEmail'] != null) {
         await doc.reference.update({
+          'previousUserEmail': doc['userEmail'],
           'startTime': doc['nextStartTime'],
           'endTime': doc['nextEndTime'],
           'userEmail': doc['nextUserEmail'],
+          'vehicle': doc['nextVehicle'],
           'reserved': false,
           'nextStartTime': null,
           'nextEndTime': null,
           'nextUserEmail': null,
+          'nextVehicle': null,
+          'rated': false
         });
       } else {
         await doc.reference.delete();
@@ -141,68 +271,100 @@ class _MapPageState extends State<MapPage> {
   }
 
   Widget _buildMap() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _getParkingLocations(),
-      builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-        if (snapshot.hasError) {
-          return Text('Error: ${snapshot.error}');
-        }
-        switch (snapshot.connectionState) {
-          case ConnectionState.waiting:
-            return Center(child: CircularProgressIndicator());
-          default:
-            _firestoreMarkers = snapshot.data!.docs.map((doc) {
-              GeoPoint geoPoint = doc['location'];
-              DateTime endTime = doc['endTime'].toDate();
-              bool reserved = doc['reserved'];
-              String markerUserEmail = doc['userEmail'];
-              Color markerColor;
-              if (markerUserEmail == widget.userEmail) {
-                markerColor = Colors.blue;
-              } else {
-                markerColor = reserved
-                    ? Color.fromARGB(255, 86, 0, 198)
-                    : _calculateMarkerColor(endTime);
-              }
-              return Marker(
-                width: 80.0,
-                height: 80.0,
-                point: LatLng(geoPoint.latitude, geoPoint.longitude),
-                builder: (ctx) => Container(
-                  child: IconButton(
-                    icon: Icon(Icons.location_on),
-                    color: markerColor,
-                    iconSize: 45.0,
-                    onPressed: () {
-                      _markerOnPressed(doc, markerColor);
-                    },
-                  ),
-                ),
-              );
-            }).toList();
-            return FlutterMap(
-              options: MapOptions(
-                  center: LatLng(51.1442944, 4.4662784),
-                  zoom: 17.0,
-                  minZoom: 16.0,
-                  maxZoom: 18.0,
-                  onTap: (_, latlng) {
-                    _addMarker(latlng);
-                  },
-                  interactiveFlags: InteractiveFlag.pinchZoom |
-                      InteractiveFlag.doubleTapZoom),
-              layers: [
-                TileLayerOptions(
-                  urlTemplate:
-                      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  subdomains: ['a', 'b', 'c'],
-                ),
-                MarkerLayerOptions(markers: _firestoreMarkers + _userMarkers),
-              ],
-            );
-        }
-      },
+    return Stack(
+      children: [
+        StreamBuilder<QuerySnapshot>(
+          stream: _getParkingLocations(),
+          builder:
+              (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+            if (snapshot.hasError) {
+              return Text('Error: ${snapshot.error}');
+            }
+            switch (snapshot.connectionState) {
+              case ConnectionState.waiting:
+                return Center(child: CircularProgressIndicator());
+              default:
+                _firestoreMarkers = snapshot.data!.docs.map((doc) {
+                  GeoPoint geoPoint = doc['location'];
+                  DateTime endTime = doc['endTime'].toDate();
+                  bool reserved = doc['reserved'];
+                  String markerUserEmail = doc['userEmail'];
+                  Color markerColor;
+                  if (markerUserEmail == widget.userEmail) {
+                    if (reserved) {
+                      markerColor = Color.fromARGB(255, 86, 0, 198);
+                    } else {
+                      markerColor = Colors.blue;
+                    }
+                  } else {
+                    markerColor = reserved
+                        ? Color.fromARGB(255, 86, 0, 198)
+                        : _calculateMarkerColor(endTime);
+                  }
+                  return Marker(
+                    width: 80.0,
+                    height: 80.0,
+                    point: LatLng(geoPoint.latitude, geoPoint.longitude),
+                    builder: (ctx) => Container(
+                      child: IconButton(
+                        icon: Icon(Icons.location_on),
+                        color: markerColor,
+                        iconSize: 45.0,
+                        onPressed: () {
+                          _markerOnPressed(doc, markerColor);
+                        },
+                      ),
+                    ),
+                  );
+                }).toList();
+                return FlutterMap(
+                  options: MapOptions(
+                      center: LatLng(51.1442944, 4.4662784),
+                      zoom: 17.0,
+                      minZoom: 16.0,
+                      maxZoom: 18.0,
+                      onTap: (_, latlng) {
+                        _addMarker(latlng);
+                      },
+                      interactiveFlags: InteractiveFlag.pinchZoom |
+                          InteractiveFlag.doubleTapZoom),
+                  layers: [
+                    TileLayerOptions(
+                      urlTemplate:
+                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: ['a', 'b', 'c'],
+                    ),
+                    MarkerLayerOptions(
+                        markers: _firestoreMarkers + _userMarkers),
+                  ],
+                );
+            }
+          },
+        ),
+        Positioned(
+          top: 10,
+          left: 0,
+          right: 0,
+          child: Center(child: _buildVehicleButton()),
+        ),
+      ],
     );
+  }
+
+  Future<double> _getUserRating(String userEmail) async {
+    double rating = 0;
+    QuerySnapshot userQuery = await FirebaseFirestore.instance
+        .collection('users')
+        .where('email', isEqualTo: userEmail)
+        .get();
+
+    if (userQuery.docs.isNotEmpty) {
+      DocumentSnapshot userDoc = userQuery.docs.first;
+      List<dynamic> ratings = userDoc['ratings'];
+      rating = ratings[0] / ratings[1];
+    }
+
+    return rating;
   }
 
   void _markerOnPressed(DocumentSnapshot? doc, Color markerColor,
@@ -215,6 +377,10 @@ class _MapPageState extends State<MapPage> {
     String? nextUserEmail = doc?['nextUserEmail'];
     DateTime? nextStartTime = doc?['nextStartTime']?.toDate();
     DateTime? nextEndTime = doc?['nextEndTime']?.toDate();
+    String? vehicleBrand = doc?['vehicle']['brand'];
+    String? vehicleModel = doc?['vehicle']['model'];
+    String? vehicleColor = doc?['vehicle']['color'];
+    String? previousUserEmail = doc?['previousUserEmail'];
 
     if (doc != null) {
       GeoPoint geoPoint = doc['location'];
@@ -229,38 +395,86 @@ class _MapPageState extends State<MapPage> {
     }
     String address =
         await _getAddressFromLatLng(location.latitude, location.longitude);
+    double userRating =
+        userEmail != 'Niet ingesteld' ? await _getUserRating(userEmail) : 0;
+
     if (isNew) {
       _showEndTimeInputDialog(location);
     } else {
       showDialog(
         context: context,
         builder: (BuildContext context) {
+          bool showPreviousUser = widget.userEmail == userEmail &&
+              previousUserEmail != null &&
+              !(doc?['rated'] ?? false);
+
           return AlertDialog(
             title: Text('Gegevens parkeerplaats',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Adres: $address'),
-                SizedBox(height: 10),
-                Text(
-                  'Huidige sessie: ${startTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(startTime) : 'Niet ingesteld'} - ${endTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(endTime) : 'Niet ingesteld'}',
-                ),
-                endTime != null
-                    ? RemainingTimeWidget(endTime: endTime)
-                    : SizedBox.shrink(),
-                Text('Gebruiker: $userEmail'),
-                SizedBox(height: 15),
-                nextUserEmail != null
-                    ? Text(
-                        'Volgende sessie: ${nextStartTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(nextStartTime) : 'Niet ingesteld'} - ${nextEndTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(nextEndTime) : 'Niet ingesteld'}',
-                      )
-                    : SizedBox.shrink(),
-                nextUserEmail != null
-                    ? Text('Volgende gebruiker: $nextUserEmail')
-                    : SizedBox.shrink(),
-              ],
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Adres:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('$address'),
+                  SizedBox(height: 10),
+                  if (endTime != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Resterende tijd:',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        RemainingTimeWidget(endTime: endTime),
+                      ],
+                    ),
+                  SizedBox(height: 10),
+                  Text('Gebruiker:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('$userEmail    ${userRating.toStringAsFixed(2)}/5'),
+                  SizedBox(height: 10),
+                  if (vehicleBrand != null &&
+                      vehicleModel != null &&
+                      vehicleColor != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Voertuig:',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text('$vehicleBrand $vehicleModel, $vehicleColor'),
+                      ],
+                    ),
+                  SizedBox(height: 15),
+                  if (nextUserEmail != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Volgende sessie:',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          '${nextStartTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(nextStartTime) : 'Niet ingesteld'} - ${nextEndTime != null ? DateFormat('dd-MM-yyyy HH:mm').format(nextEndTime) : 'Niet ingesteld'}',
+                        ),
+                        Text('$nextUserEmail'),
+                      ],
+                    ),
+                  if (showPreviousUser)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(height: 10),
+                        Text('Vorige gebruiker:',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text('$previousUserEmail'),
+                        TextButton(
+                          child: Text('Beoordeel'),
+                          onPressed: () {
+                            _ratePreviousUser(previousUserEmail, doc: doc);
+                          },
+                        ),
+                      ],
+                    ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -269,25 +483,119 @@ class _MapPageState extends State<MapPage> {
                   Navigator.of(context).pop();
                 },
               ),
-              doc != null
-                  ? userEmail == widget.userEmail
-                      ? TextButton(
-                          child: Text('Verleng'),
-                          onPressed: () {
-                            _showExtendInputDialog(doc, context);
-                          },
-                        )
-                      : TextButton(
-                          child: Text('Reserveer'),
-                          onPressed: () {
-                            _onReserveButtonPressed(doc, context);
-                          },
-                        )
-                  : SizedBox.shrink(),
+              if (doc != null)
+                userEmail == widget.userEmail && !reserved
+                    ? TextButton(
+                        child: Text('Verleng'),
+                        onPressed: () {
+                          _showExtendInputDialog(doc, context);
+                        },
+                      )
+                    : !reserved
+                        ? TextButton(
+                            child: Text('Reserveer'),
+                            onPressed: () {
+                              _onReserveButtonPressed(doc, context);
+                            },
+                          )
+                        : SizedBox.shrink()
             ],
           );
         },
       );
+    }
+  }
+
+  Future<void> _ratePreviousUser(String? previousUserEmail,
+      {DocumentSnapshot? doc}) async {
+    TextEditingController _ratingController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              title: Text('Beoordeel de vorige gebruiker'),
+              content: Form(
+                child: TextFormField(
+                  controller: _ratingController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(hintText: "Beoordeling (0-5)"),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                        RegExp(r'^(\d{0,1})(\.\d{0,1})?$')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Voer een beoordeling in';
+                    }
+                    double? rating = double.tryParse(value);
+                    if (rating == null || rating < 0 || rating > 5) {
+                      return 'Voer een geldige beoordeling in (0-5)';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  child: Text('OK'),
+                  onPressed: () async {
+                    double rating = double.parse(_ratingController.text);
+
+                    // Zoek naar een gebruiker met een e-mailadres dat overeenkomt met previousUserEmail
+                    QuerySnapshot userQuery = await FirebaseFirestore.instance
+                        .collection('users')
+                        .where('email', isEqualTo: previousUserEmail)
+                        .get();
+
+                    if (userQuery.docs.isNotEmpty) {
+                      DocumentSnapshot userDoc = userQuery.docs.first;
+                      List<dynamic> ratings = userDoc['ratings'];
+                      double newSumOfRatings = ratings[0] + rating;
+                      int newNumberOfRatings = ratings[1] + 1;
+
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(userDoc.id)
+                          .update({
+                        'ratings': [newSumOfRatings, newNumberOfRatings]
+                      });
+                      await _updateParkingSpotRatedStatus(doc?.id);
+                    } else {
+                      print(
+                          'Geen gebruiker gevonden met e-mail: $previousUserEmail');
+                    }
+
+                    _ratingController.clear();
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _updateParkingSpotRatedStatus(String? docId) async {
+    // Voeg een korte vertraging toe voordat u het document bijwerkt
+    await Future.delayed(Duration(milliseconds: 200));
+
+    if (docId != null) {
+      DocumentReference docRef =
+          FirebaseFirestore.instance.collection('parkingSpots').doc(docId);
+      DocumentSnapshot docSnapshot = await docRef.get();
+
+      if (docSnapshot.exists) {
+        await docRef.update({'rated': true});
+      } else {
+        print('Document niet gevonden: $docId');
+      }
+    } else {
+      print('Ongeldig document ID');
     }
   }
 
@@ -365,9 +673,13 @@ class _MapPageState extends State<MapPage> {
       'endTime': endTime,
       'reserved': false,
       'userEmail': widget.userEmail,
-      'nextUserEmail': null, // Voeg dit toe
-      'nextStartTime': null, // Voeg dit toe
-      'nextEndTime': null, // Voeg dit toe
+      'nextUserEmail': null,
+      'nextStartTime': null,
+      'nextEndTime': null,
+      'vehicle': activeVehicle,
+      'nextVehicle': null,
+      'previousUserEmail': null,
+      'rated': false
     });
     setState(() {
       _userMarkers.removeLast();
@@ -443,6 +755,7 @@ class _MapPageState extends State<MapPage> {
                       'nextEndTime': endTime,
                       'reserved': true,
                       'nextUserEmail': widget.userEmail,
+                      'nextVehicle': widget.activeVehicle
                     });
 
                     _endTimeController.clear();
@@ -485,25 +798,48 @@ class _MapPageState extends State<MapPage> {
   }
 
   void _addMarker(LatLng latlng) {
-    Marker marker = Marker(
-      width: 80.0,
-      height: 80.0,
-      point: latlng,
-      builder: (ctx) => Container(
-        child: IconButton(
-          icon: Icon(Icons.location_on),
-          color: Colors.blue,
-          iconSize: 45.0,
-          onPressed: () {
-            _markerOnPressed(null, Colors.blue, isNew: true);
-          },
+    // Controleer of er een activeVehicle is geselecteerd
+    if (activeVehicle != null && activeVehicle!.isNotEmpty) {
+      Marker marker = Marker(
+        width: 80.0,
+        height: 80.0,
+        point: latlng,
+        builder: (ctx) => Container(
+          child: IconButton(
+            icon: Icon(Icons.location_on),
+            color: Colors.blue,
+            iconSize: 45.0,
+            onPressed: () {
+              _markerOnPressed(null, Colors.blue, isNew: true);
+            },
+          ),
         ),
-      ),
-    );
+      );
 
-    setState(() {
-      _userMarkers.add(marker);
-    });
+      setState(() {
+        _userMarkers.add(marker);
+      });
+    } else {
+      // Toon een bericht als er geen activeVehicle is geselecteerd
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Geen voertuig geselecteerd'),
+            content: Text(
+                'Selecteer een voertuig voordat u een parkeerplaats markeert.'),
+            actions: [
+              TextButton(
+                child: Text('OK'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+    }
   }
 
   void _getCurrentLocation() async {
@@ -558,7 +894,7 @@ class _RemainingTimeWidgetState extends State<RemainingTimeWidget> {
     int minutes = remaining.inMinutes.remainder(60);
 
     setState(() {
-      _remainingTime = 'Resterende tijd: $hours uren en $minutes minuten';
+      _remainingTime = '$hours uren en $minutes minuten';
     });
   }
 

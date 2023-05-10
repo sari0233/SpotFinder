@@ -110,6 +110,10 @@ class _SignupPageState extends State<SignupPage> {
               encryptedPassword, // Store the encrypted password in Firestore
           'vehicles': [], // Initialize an empty list of vehicles
           'activeVehicle': null, // Initialize the active vehicle to 'null
+          'ratings': [
+            0,
+            0
+          ], // Initialize the ratings array with two values: sum of ratings and number of ratings
         });
 
         // ignore: use_build_context_synchronously
