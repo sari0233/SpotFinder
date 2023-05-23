@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:spotfinder/pages/login_page.dart';
+import 'package:spotfinder/pages/privacypolicy_page.dart';
+import 'package:spotfinder/pages/termsofservice_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -19,7 +22,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       body: ListView(
         children: [
-          ListTile(
+          /*ListTile(
             title: const Text('Notifications'),
             trailing: Switch(
               value: notificationsEnabled,
@@ -40,33 +43,38 @@ class _SettingsPageState extends State<SettingsPage> {
                 });
               },
             ),
-          ),
-          ListTile(
-            title: const Text('Change password'),
-            trailing: const Icon(Icons.arrow_forward_ios),
-            onTap: () {
-              // TODO: Implement password change functionality
-            },
-          ),
+          ),*/
           ListTile(
             title: const Text('Privacy policy'),
             trailing: const Icon(Icons.arrow_forward_ios),
             onTap: () {
-              // TODO: Implement privacy policy page navigation
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const PrivacyPolicyPage()),
+              );
             },
           ),
           ListTile(
             title: const Text('Terms of service'),
             trailing: const Icon(Icons.arrow_forward_ios),
             onTap: () {
-              // TODO: Implement terms of service page navigation
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const TermsOfServicePage()),
+              );
             },
           ),
           ListTile(
             title: const Text('Sign out'),
             trailing: const Icon(Icons.arrow_forward_ios),
             onTap: () {
-              // TODO: Implement sign out functionality
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+                (Route<dynamic> route) => false,
+              );
             },
           ),
         ],
