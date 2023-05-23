@@ -46,7 +46,9 @@ class HomePage extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => HistoryPage(currentUserEmail: userEmail)),
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                HistoryPage(currentUserEmail: userEmail)),
                       );
                     }),
                 IconButton(
@@ -401,8 +403,13 @@ class _MapPageState extends State<MapPage> {
     }
     String address =
         await _getAddressFromLatLng(location.latitude, location.longitude);
-    double userRating =
-        userEmail != 'Niet ingesteld' ? await _getUserRating(userEmail) : 0;
+    double userRating = 0;
+    if (userEmail != 'Niet ingesteld') {
+      userRating = await _getUserRating(userEmail);
+      if (userRating.isNaN) {
+        userRating = 0;
+      }
+    }
 
     if (isNew) {
       _showEndTimeInputDialog(location);
