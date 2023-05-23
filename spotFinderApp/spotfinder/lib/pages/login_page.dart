@@ -6,10 +6,9 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({Key? key});
 
   @override
-  // ignore: library_private_types_in_public_api
   _LoginPageState createState() => _LoginPageState();
 }
 
@@ -32,18 +31,18 @@ class _LoginPageState extends State<LoginPage> {
 
         // Check if the encrypted password matches the one stored in Firestore
         if (users[0]['password'] == encryptedPassword) {
-          // ignore: use_build_context_synchronously
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
-                builder: (context) => HomePage(
-                      userEmail: users[0]['email'],
-                      activeVehicle: users[0]['activeVehicle'],
-                    )),(Route<dynamic> route) => false,
+              builder: (context) => HomePage(
+                userEmail: users[0]['email'],
+                activeVehicle: users[0]['activeVehicle'],
+              ),
+            ),
+            (Route<dynamic> route) => false,
           );
         } else {
           // Invalid password
-          // ignore: use_build_context_synchronously
           showDialog(
             context: context,
             builder: (BuildContext context) {
@@ -61,7 +60,6 @@ class _LoginPageState extends State<LoginPage> {
         }
       } else {
         // Invalid email
-        // ignore: use_build_context_synchronously
         showDialog(
           context: context,
           builder: (BuildContext context) {
@@ -78,7 +76,6 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error during login: $e');
     }
   }
@@ -92,6 +89,13 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            Center(
+              child: Image.asset(
+              'lib/images/spotfinder_logo.png',
+              height: 200,
+              width: 200,
+            ),
+            ),
             TextField(
               controller: emailController,
               decoration: const InputDecoration(

@@ -46,7 +46,7 @@ class HomePage extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => HistoryPage()),
+                        MaterialPageRoute(builder: (context) => HistoryPage(currentUserEmail: userEmail)),
                       );
                     }),
                 IconButton(
