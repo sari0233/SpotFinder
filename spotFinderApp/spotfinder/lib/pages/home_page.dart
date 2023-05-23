@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:geocoding/geocoding.dart';
 import 'package:collection/collection.dart';
+import 'package:spotfinder/pages/history_page.dart';
 import 'package:spotfinder/pages/profile_page.dart';
 import 'package:spotfinder/pages/settings_page.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
@@ -40,6 +41,14 @@ class HomePage extends StatelessWidget {
                   icon: const Icon(Icons.map_sharp),
                   onPressed: () {},
                 ),
+                IconButton(
+                    icon: const Icon(Icons.history),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => HistoryPage()),
+                      );
+                    }),
                 IconButton(
                     icon: const Icon(Icons.directions_car),
                     onPressed: () {
