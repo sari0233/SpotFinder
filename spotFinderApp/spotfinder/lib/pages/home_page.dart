@@ -12,6 +12,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:collection/collection.dart';
 import 'package:spotfinder/pages/profile_page.dart';
 import 'package:spotfinder/pages/settings_page.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 
 class HomePage extends StatelessWidget {
   final String userEmail;
@@ -36,15 +37,11 @@ class HomePage extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.home),
+                  icon: const Icon(Icons.map_sharp),
                   onPressed: () {},
                 ),
                 IconButton(
-                  icon: const Icon(Icons.history),
-                  onPressed: () {},
-                ),
-                IconButton(
-                    icon: const Icon(Icons.person),
+                    icon: const Icon(Icons.directions_car),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -319,7 +316,7 @@ class _MapPageState extends State<MapPage> {
                 }).toList();
                 return FlutterMap(
                   options: MapOptions(
-                      center: LatLng(51.1442944, 4.4662784),
+                      center: LatLng(51.2300204, 4.4161833),
                       zoom: 17.0,
                       minZoom: 16.0,
                       maxZoom: 18.0,
@@ -431,7 +428,23 @@ class _MapPageState extends State<MapPage> {
                   SizedBox(height: 10),
                   Text('Gebruiker:',
                       style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text('$userEmail    ${userRating.toStringAsFixed(2)}/5'),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('$userEmail'),
+                      SizedBox(height: 10),
+                      RatingBarIndicator(
+                        rating: userRating,
+                        itemBuilder: (context, index) => Icon(
+                          Icons.star,
+                          color: Colors.amber,
+                        ),
+                        itemCount: 5,
+                        itemSize: 20.0,
+                        direction: Axis.horizontal,
+                      ),
+                    ],
+                  ),
                   SizedBox(height: 10),
                   if (vehicleBrand != null &&
                       vehicleModel != null &&
