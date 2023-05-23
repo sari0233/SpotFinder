@@ -65,7 +65,7 @@ class _HistoryPageState extends State<HistoryPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Reservation ID: $reservationId',
+                                  'Reservation: ',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),

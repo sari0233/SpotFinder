@@ -91,7 +91,7 @@ class _LoginPageState extends State<LoginPage> {
           children: <Widget>[
             Center(
               child: Image.asset(
-              'lib/images/spotfinder_logo.png',
+              'assets/images/spotfinder_logo.png',
               height: 200,
               width: 200,
             ),
