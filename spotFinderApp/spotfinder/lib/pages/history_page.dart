@@ -3,7 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key});
+  final String currentUserEmail;
+
+  const HistoryPage({Key? key, required this.currentUserEmail}) : super(key: key);
 
   @override
   _HistoryPageState createState() => _HistoryPageState();
@@ -49,6 +51,10 @@ class _HistoryPageState extends State<HistoryPage> {
                       var formattedEndTime =
                           DateFormat('dd-MM-yyyy HH:mm').format(endTime.toDate());
 
+                      if (mail != widget.currentUserEmail) {
+                        return Container(); // Skip displaying reservations for other users
+                      }
+
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: Card(
@@ -59,7 +65,7 @@ class _HistoryPageState extends State<HistoryPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Reservation ID: $reservationId',
+                                  'Reservation: ',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -68,6 +74,11 @@ class _HistoryPageState extends State<HistoryPage> {
                                 Text('Start time: $formattedStartTime'),
                                 Text('End time: $formattedEndTime'),
                                 Text('Email: $mail'),
+                                const SizedBox(height: 8),
+                                ElevatedButton(
+                                  onPressed: () => _cancelReservation(reservationId),
+                                  child: const Text('Cancel Reservation'),
+                                ),
                               ],
                             ),
                           ),
@@ -86,5 +97,18 @@ class _HistoryPageState extends State<HistoryPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _cancelReservation(String reservationId) async {
+    try {
+      await _reservationCollection.doc(reservationId).delete();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reservation cancelled successfully.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to cancel reservation. Please try again.')),
+      );
+    }
   }
 }

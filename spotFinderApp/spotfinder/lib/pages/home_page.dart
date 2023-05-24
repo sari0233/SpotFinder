@@ -46,7 +46,9 @@ class HomePage extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => HistoryPage()),
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                HistoryPage(currentUserEmail: userEmail)),
                       );
                     }),
                 IconButton(
@@ -401,8 +403,13 @@ class _MapPageState extends State<MapPage> {
     }
     String address =
         await _getAddressFromLatLng(location.latitude, location.longitude);
-    double userRating =
-        userEmail != 'Niet ingesteld' ? await _getUserRating(userEmail) : 0;
+    double userRating = 0;
+    if (userEmail != 'Niet ingesteld') {
+      userRating = await _getUserRating(userEmail);
+      if (userRating.isNaN) {
+        userRating = 0;
+      }
+    }
 
     if (isNew) {
       _showEndTimeInputDialog(location);
@@ -756,7 +763,8 @@ class _MapPageState extends State<MapPage> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             return AlertDialog(
-              title: Text('Voer de eindtijd in voor uw reservering'),
+              title:
+                  Text('Voer de eindtijd in voor uw reservering (optioneel)'),
               content: TextField(
                 controller: _endTimeController,
                 keyboardType: TextInputType.datetime,
@@ -766,11 +774,17 @@ class _MapPageState extends State<MapPage> {
                 TextButton(
                   child: Text('OK'),
                   onPressed: () async {
-                    DateTime parsedTime =
-                        DateFormat('HH:mm').parse(_endTimeController.text);
-                    DateTime now = DateTime.now();
-                    DateTime endTime = DateTime(now.year, now.month, now.day,
-                        parsedTime.hour, parsedTime.minute);
+                    DateTime endTime;
+                    if (_endTimeController.text.isEmpty) {
+                      // Als de gebruiker geen tijd heeft ingevoerd, stel dan de eindtijd in op de eindtijd van de vorige gebruiker
+                      endTime = doc['endTime'].toDate();
+                    } else {
+                      DateTime parsedTime =
+                          DateFormat('HH:mm').parse(_endTimeController.text);
+                      DateTime now = DateTime.now();
+                      endTime = DateTime(now.year, now.month, now.day,
+                          parsedTime.hour, parsedTime.minute);
+                    }
 
                     await doc.reference.update({
                       'nextStartTime': doc['endTime'],
